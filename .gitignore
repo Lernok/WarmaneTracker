@@ -1,0 +1,21 @@
+# build
+bin/
+obj/
+
+# VS
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# logs
+*.log
+
+# db (por ahora usaremos SQLite en dev)
+*.db
+*.db-shm
+*.db-wal
+
+# secrets/local overrides
+appsettings.*.json
