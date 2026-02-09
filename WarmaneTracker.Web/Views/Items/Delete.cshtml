@@ -1,0 +1,16 @@
+﻿@model WarmaneTracker.Web.Models.Item
+@{
+    ViewData["Title"] = "Borrar Item";
+}
+
+<h2>Borrar Item</h2>
+
+<div class="alert alert-warning mt-3">
+    ¿Seguro querés borrar <strong>@Model.Name</strong>?
+</div>
+
+<form asp-action="Delete" method="post">
+    <input type="hidden" name="id" value="@Model.Id" />
+    <button class="btn btn-danger">Borrar</button>
+    <a class="btn btn-link" asp-action="Index">Cancelar</a>
+</form>
