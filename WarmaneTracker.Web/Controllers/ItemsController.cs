@@ -121,5 +121,20 @@ public class ItemsController : Controller
 
         return RedirectToAction(nameof(Index));
     }
+    public async Task<IActionResult> History(int id)
+    {
+        var item = await _db.Items.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        if (item is null) return NotFound();
+
+        var history = await _db.PriceHistory
+            .AsNoTracking()
+            .Where(x => x.ItemId == id)
+            .OrderByDescending(x => x.TimestampUtc)
+            .Take(200)
+            .ToListAsync();
+
+        ViewBag.Item = item;
+        return View(history);
+    }
 
 }
