@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using WarmaneTracker.Web.Data;
 using WarmaneTracker.Web.Models;
+using WarmaneTracker.Web.Services;
 
 namespace WarmaneTracker.Web.Controllers;
 
@@ -84,4 +85,41 @@ public class ItemsController : Controller
         await _db.SaveChangesAsync();
         return RedirectToAction(nameof(Index));
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Refresh(int id, [FromServices] AhScraper scraper, CancellationToken ct)
+    {
+        var item = await _db.Items.FindAsync(new object[] { id }, ct);
+        if (item is null) return RedirectToAction(nameof(Index));
+
+        try
+        {
+            var snap = await scraper.FetchAsync(item.Url, ct);
+
+            item.LastMedianBuyoutGold = snap.Median;
+            item.LastMinBuyoutGold = snap.Min;
+            item.LastQty = snap.Qty;
+            item.LastFetchedAtUtc = DateTime.UtcNow;
+
+            _db.PriceHistory.Add(new PriceHistory
+            {
+                ItemId = item.Id,
+                TimestampUtc = DateTime.UtcNow,
+                MedianBuyoutGold = snap.Median,
+                MinBuyoutGold = snap.Min,
+                Qty = snap.Qty
+            });
+
+            await _db.SaveChangesAsync(ct);
+            TempData["Msg"] = "OK: refrescado";
+        }
+        catch (Exception ex)
+        {
+            TempData["Msg"] = "ERROR: " + ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
 }

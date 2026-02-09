@@ -8,7 +8,10 @@
     <h2 class="m-0">Items</h2>
     <a class="btn btn-primary" asp-action="Create">Nuevo</a>
 </div>
-
+@if (TempData["Msg"] is string msg)
+{
+    <div class="alert alert-info">@msg</div>
+}
 <table class="table table-striped table-sm align-middle">
     <thead>
         <tr>
@@ -34,6 +37,11 @@
                 <td class="text-end">@((i.LastQty?.ToString()) ?? "-")</td>
                 <td>@(i.LastFetchedAtUtc?.ToString("u") ?? "-")</td>
                 <td class="text-end">
+                    <form asp-action="Refresh" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@i.Id" />
+                        <button class="btn btn-sm btn-outline-primary">Refresh</button>
+                    </form>
                     <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@i.Id">Editar</a>
                     <a class="btn btn-sm btn-outline-danger" asp-action="Delete" asp-route-id="@i.Id">Borrar</a>
                 </td>
