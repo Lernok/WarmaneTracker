@@ -14,9 +14,26 @@ public class ItemsController : Controller
 
     public async Task<IActionResult> Index()
     {
+        var since = DateTime.UtcNow.AddHours(-72);
+
         var items = await _db.Items.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
+        var itemIds = items.Select(x => x.Id).ToList();
+
+        var history = await _db.PriceHistory.AsNoTracking()
+            .Where(x => itemIds.Contains(x.ItemId) && x.TimestampUtc >= since)
+            .ToListAsync();
+
+        var median72 = history
+            .GroupBy(x => x.ItemId)
+            .ToDictionary(
+                g => g.Key,
+                g => WarmaneTracker.Web.Services.Stats.Median(g.Select(x => x.MedianBuyoutGold))
+            );
+
+        ViewBag.Median72 = median72;
         return View(items);
     }
+
 
     public IActionResult Create() => View(new Item());
 

@@ -12,6 +12,10 @@
 {
     <div class="alert alert-info">@msg</div>
 }
+@{
+    var median72 = ViewBag.Median72 as Dictionary<int, decimal> ?? new();
+}
+
 <table class="table table-striped table-sm align-middle">
     <thead>
         <tr>
@@ -20,6 +24,7 @@
             <th class="text-end">Median</th>
             <th class="text-end">Min</th>
             <th class="text-end">Qty</th>
+            <th class="text-end">Median72h</th>
             <th>Fetched</th>
             <th></th>
         </tr>
@@ -35,6 +40,9 @@
                 <td class="text-end">@((i.LastMedianBuyoutGold?.ToString("0.##")) ?? "-")</td>
                 <td class="text-end">@((i.LastMinBuyoutGold?.ToString("0.##")) ?? "-")</td>
                 <td class="text-end">@((i.LastQty?.ToString()) ?? "-")</td>
+                <td class="text-end">
+                    @(median72.TryGetValue(i.Id, out var m) ? m.ToString("0.##") : "-")
+                </td>
                 <td>@(i.LastFetchedAtUtc?.ToString("u") ?? "-")</td>
                 <td class="text-end">
                     <form asp-action="Refresh" method="post" class="d-inline">
