@@ -18,4 +18,6 @@ public class Item
 
     public List<PriceHistory> History { get; set; } = new();
     public Stock? Stock { get; set; }
+    public int TargetStock { get; set; } = 0;
+
 }

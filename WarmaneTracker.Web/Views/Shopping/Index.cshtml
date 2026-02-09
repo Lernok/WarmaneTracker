@@ -1,0 +1,43 @@
+﻿@model List<WarmaneTracker.Web.Controllers.ShoppingController.Row>
+@{
+    ViewData["Title"] = "Shopping List";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="m-0">Shopping List</h2>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-success">No hay nada para comprar (NeedToBuy = 0).</div>
+}
+else
+{
+    <table class="table table-striped table-sm align-middle">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th class="text-end">OnHand</th>
+                <th class="text-end">Target</th>
+                <th class="text-end">ToBuy</th>
+                <th class="text-end">Median72h</th>
+                <th class="text-end">Est. Cost</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in Model)
+            {
+                <tr>
+                    <td>
+                        <a href="@r.Url" target="_blank">@r.Name</a>
+                    </td>
+                    <td class="text-end">@r.OnHand</td>
+                    <td class="text-end">@r.Target</td>
+                    <td class="text-end fw-bold">@r.NeedToBuy</td>
+                    <td class="text-end">@((r.Median72h?.ToString("0.##")) ?? "-")</td>
+                    <td class="text-end">@((r.EstCost?.ToString("0.##")) ?? "-")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

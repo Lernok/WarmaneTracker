@@ -70,7 +70,15 @@ public class ItemsController : Controller
         if (id != item.Id) return BadRequest();
         if (!ModelState.IsValid) return View(item);
 
-        _db.Entry(item).State = EntityState.Modified;
+        var dbItem = await _db.Items.FindAsync(id);
+        if (dbItem is null) return NotFound();
+
+        // Solo campos editables
+        dbItem.Name = item.Name;
+        dbItem.Url = item.Url;
+        dbItem.Faction = item.Faction;
+        dbItem.Realm = item.Realm;
+        dbItem.TargetStock = item.TargetStock;
 
         try
         {
@@ -83,6 +91,7 @@ public class ItemsController : Controller
             return View(item);
         }
     }
+
 
     public async Task<IActionResult> Delete(int id)
     {
