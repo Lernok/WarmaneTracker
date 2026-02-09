@@ -18,4 +18,5 @@ obj/
 *.db-wal
 
 # secrets/local overrides
-appsettings.*.json
+appsettings.Development.json
+appsettings.Production.json
