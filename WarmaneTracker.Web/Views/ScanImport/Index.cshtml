@@ -1,0 +1,21 @@
+﻿@{
+    ViewData["Title"] = "Scan Import";
+}
+
+<h2>Import ScanData.lua</h2>
+
+@if (TempData["Msg"] is string msg)
+{
+    <div class="alert alert-info">@msg</div>
+}
+
+<form asp-action="Index" method="post" enctype="multipart/form-data" class="mt-3">
+    @Html.AntiForgeryToken()
+
+    <div class="mb-3">
+        <input class="form-control" type="file" name="file" accept=".lua" />
+        <div class="form-text">Subí el archivo Auc-ScanData.lua exportado.</div>
+    </div>
+
+    <button class="btn btn-primary">Importar</button>
+</form>

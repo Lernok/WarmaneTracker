@@ -9,6 +9,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<WarmaneTracker.Web.Services.AhScraper>();
+builder.Services.AddHttpClient();
+builder.Services.AddHostedService<WarmaneTracker.Web.Services.AuctionScanHostedService>();
+
 
 var app = builder.Build();
 

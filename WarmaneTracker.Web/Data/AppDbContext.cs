@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Item>().HasIndex(x => x.WowItemId);
+
         modelBuilder.Entity<Item>().HasIndex(x => x.Url).IsUnique();
 
         modelBuilder.Entity<PriceHistory>()
