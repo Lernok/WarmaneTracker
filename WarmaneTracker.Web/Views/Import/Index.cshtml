@@ -1,0 +1,41 @@
+﻿@{
+    ViewData["Title"] = "Import";
+    var created = ViewBag.Created as int? ?? 0;
+    var updated = ViewBag.Updated as int? ?? 0;
+    var errors = ViewBag.Errors as List<string> ?? new();
+}
+
+<h2>Import CSV</h2>
+
+<p class="text-muted">
+    Formato por línea: <code>Name,Url,TargetStock</code>
+</p>
+
+@if (created + updated > 0 || errors.Any())
+{
+    <div class="alert alert-info">
+        Creado: <strong>@created</strong> | Actualizado: <strong>@updated</strong>
+    </div>
+
+    @if (errors.Any())
+    {
+        <div class="alert alert-warning">
+            <strong>Errores:</strong>
+            <ul class="mb-0">
+                @foreach (var e in errors)
+                {
+                    <li>@e</li>
+                }
+            </ul>
+        </div>
+    }
+}
+
+<form method="post">
+    @Html.AntiForgeryToken()
+    <div class="mb-3">
+        <textarea class="form-control" name="csv" rows="10"
+                  placeholder="Peacebloom,https://ah.nerfed.net/item/index?id=2447&faction=1&realm=17,200"></textarea>
+    </div>
+    <button class="btn btn-primary">Importar</button>
+</form>
