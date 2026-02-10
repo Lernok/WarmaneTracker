@@ -12,16 +12,38 @@ public class ItemsController : Controller
 
     public ItemsController(AppDbContext db) => _db = db;
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(int page = 1, int pageSize = 50, string? q = null, CancellationToken ct = default)
     {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize is < 10 or > 200 ? 50 : pageSize;
+
         var since = DateTime.UtcNow.AddHours(-72);
 
-        var items = await _db.Items.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
-        var itemIds = items.Select(x => x.Id).ToList();
+        var query = _db.Items.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            q = q.Trim();
+
+            // búsqueda simple (Postgres: ILike; si no compila, lo cambiamos a Like)
+            query = query.Where(i =>
+                (i.Name != null && EF.Functions.Like(i.Name, $"%{q}%")) ||
+                (i.WowItemId != null && i.WowItemId.ToString() == q));
+        }
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderBy(x => x.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        var pageItemIds = items.Select(x => x.Id).ToList();
 
         var history = await _db.PriceHistory.AsNoTracking()
-            .Where(x => itemIds.Contains(x.ItemId) && x.TimestampUtc >= since)
-            .ToListAsync();
+            .Where(x => pageItemIds.Contains(x.ItemId) && x.TimestampUtc >= since)
+            .ToListAsync(ct);
 
         var median72 = history
             .GroupBy(x => x.ItemId)
@@ -31,8 +53,14 @@ public class ItemsController : Controller
             );
 
         ViewBag.Median72 = median72;
+        ViewBag.Page = page;
+        ViewBag.PageSize = pageSize;
+        ViewBag.Total = total;
+        ViewBag.Query = q;
+
         return View(items);
     }
+
 
 
     public IActionResult Create() => View(new Item());

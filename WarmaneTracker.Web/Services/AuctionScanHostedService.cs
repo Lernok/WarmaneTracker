@@ -65,6 +65,7 @@ public sealed class AuctionScanHostedService : BackgroundService
         // Parse
         var perItemPricesGold = new Dictionary<int, List<decimal>>();
         var perItemQty = new Dictionary<int, int>();
+        var perItemName = new Dictionary<int, string>(); // itemId -> Name
 
         int rowsParsed = 0, rowsFailed = 0;
         DateTime? scanTimeUtc = null;
@@ -95,7 +96,18 @@ public sealed class AuctionScanHostedService : BackgroundService
 
             var parts = entry.Split(',');
 
-            // stack index (as validated in your FIRST ENTRY CHUNK)
+            // name (index 8) comes as "Silverleaf"
+            if (parts.Length > 8)
+            {
+                var parsedName = parts[8].Trim();
+                if (parsedName.Length >= 2 && parsedName[0] == '"' && parsedName[^1] == '"')
+                    parsedName = parsedName.Substring(1, parsedName.Length - 2);
+
+                if (!string.IsNullOrWhiteSpace(parsedName) && !perItemName.ContainsKey(itemId))
+                    perItemName[itemId] = parsedName;
+            }
+
+            // stack index (validated from your chunk)
             int stack = 1;
             if (parts.Length > 6 && int.TryParse(parts[6], out var st) && st > 0)
                 stack = st;
@@ -160,6 +172,9 @@ public sealed class AuctionScanHostedService : BackgroundService
         var cutoff = DateTime.UtcNow.AddHours(-72);
         await db.PriceHistory.Where(x => x.TimestampUtc < cutoff).ExecuteDeleteAsync(ct);
 
+        // Evita duplicados de snapshots para el mismo ts
+        await db.PriceHistory.Where(x => x.TimestampUtc == ts).ExecuteDeleteAsync(ct);
+
         var ids = perItemPricesGold.Keys.ToList();
         var urls = ids.Select(id => $"https://ah.nerfed.net/item/index?id={id}&faction=1&realm=17").ToList();
 
@@ -172,8 +187,6 @@ public sealed class AuctionScanHostedService : BackgroundService
             .ToDictionaryAsync(x => x.WowItemId!.Value, ct);
 
         int itemsCreated = 0, itemsUpdated = 0, historyInserted = 0;
-
-        await db.PriceHistory.Where(x => x.TimestampUtc == ts).ExecuteDeleteAsync(ct);
 
         foreach (var id in ids)
         {
@@ -190,12 +203,14 @@ public sealed class AuctionScanHostedService : BackgroundService
             if (!existingByItemId.TryGetValue(id, out var item))
                 existingByUrl.TryGetValue(url, out item);
 
+            perItemName.TryGetValue(id, out var nameFromScan);
+
             if (item is null)
             {
                 item = new Item
                 {
                     WowItemId = id,
-                    Name = $"Item {id}",
+                    Name = !string.IsNullOrWhiteSpace(nameFromScan) ? nameFromScan : $"Item {id}",
                     Url = url,
                     Faction = 1,
                     Realm = 17
@@ -207,6 +222,13 @@ public sealed class AuctionScanHostedService : BackgroundService
             {
                 item.WowItemId ??= id;
                 itemsUpdated++;
+
+                // si todavía es placeholder, lo reemplazamos
+                if (!string.IsNullOrWhiteSpace(nameFromScan) &&
+                    (string.IsNullOrWhiteSpace(item.Name) || item.Name.StartsWith("Item ")))
+                {
+                    item.Name = nameFromScan;
+                }
             }
 
             item.LastMedianBuyoutGold = median;

@@ -93,6 +93,19 @@ public class ScanImportController : Controller
 
             // Split por coma (CSV simple para los campos numéricos que necesitamos)
             var parts = entry.Split(',');
+            string? parsedName = null;
+            if (parts.Length > 8)
+            {
+                parsedName = parts[8].Trim();
+
+                // saca comillas si viene como "Silverleaf"
+                if (parsedName.Length >= 2 && parsedName[0] == '"' && parsedName[^1] == '"')
+                    parsedName = parsedName.Substring(1, parsedName.Length - 2);
+
+                if (string.IsNullOrWhiteSpace(parsedName))
+                    parsedName = null;
+            }
+
 
             // stack está en índice 6 según tu chunk:
             // 0={"|c..|Hitem..", 1=226, 2="Armor", 3="Cloth", 4=8, 5=startBid, 6=stack, 7=ts, ...
