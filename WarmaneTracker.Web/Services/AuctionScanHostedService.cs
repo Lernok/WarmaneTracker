@@ -110,6 +110,8 @@ public sealed class AuctionScanHostedService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", ct);
+        await db.Database.ExecuteSqlRawAsync("PRAGMA busy_timeout=60000;", ct);
         // Retención 72h: borrar history viejo
         var cutoff = DateTime.UtcNow.AddHours(-72);
         await db.PriceHistory.Where(x => x.TimestampUtc < cutoff).ExecuteDeleteAsync(ct);

@@ -5,8 +5,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddDbContext<AppDbContext>(o =>
+    o.UseSqlite(builder.Configuration.GetConnectionString("Default"),
+        x => x.CommandTimeout(120)));
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<WarmaneTracker.Web.Services.AhScraper>();
 builder.Services.AddHttpClient();
@@ -14,6 +15,12 @@ builder.Services.AddHostedService<WarmaneTracker.Web.Services.AuctionScanHostedS
 
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<WarmaneTracker.Web.Data.AppDbContext>();
+    await WarmaneTracker.Web.Data.SeedData.EnsureSeededAsync(db);
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

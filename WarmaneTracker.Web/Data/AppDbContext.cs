@@ -10,6 +10,10 @@ public class AppDbContext : DbContext
     public DbSet<Item> Items => Set<Item>();
     public DbSet<PriceHistory> PriceHistory => Set<PriceHistory>();
     public DbSet<Stock> Stock => Set<Stock>();
+    public DbSet<ProfessionPlan> ProfessionPlans => Set<ProfessionPlan>();
+    public DbSet<PlanStep> PlanSteps => Set<PlanStep>();
+    public DbSet<StepReagent> StepReagents => Set<StepReagent>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,5 +32,21 @@ public class AppDbContext : DbContext
             .WithOne(x => x.Stock)
             .HasForeignKey<Stock>(x => x.ItemId)
             .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ProfessionPlan>()
+            .HasMany(p => p.Steps)
+            .WithOne(s => s.ProfessionPlan)
+            .HasForeignKey(s => s.ProfessionPlanId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PlanStep>()
+            .HasMany(s => s.Reagents)
+            .WithOne(r => r.PlanStep)
+            .HasForeignKey(r => r.PlanStepId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PlanStep>()
+            .HasIndex(s => new { s.ProfessionPlanId, s.Order })
+            .IsUnique();
+
     }
 }
