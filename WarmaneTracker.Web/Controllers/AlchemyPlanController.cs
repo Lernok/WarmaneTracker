@@ -50,7 +50,9 @@ public class AlchemyPlanController : Controller
         }
 
         // Traer precios para reagentes (por WowItemId)
-        var reagentIds = stepEntity.Reagents.Select(r => r.WowItemId).Distinct().ToList();
+        var vendorReagents = stepEntity.Reagents.Where(r => r.IsVendor).ToList();
+        var reagentIds = stepEntity.Reagents.Where(r => !r.IsVendor).Select(r => r.WowItemId).Distinct().ToList();
+
 
         var items = await _db.Items.AsNoTracking()
             .Where(i => i.WowItemId != null && reagentIds.Contains(i.WowItemId.Value))
@@ -70,6 +72,25 @@ public class AlchemyPlanController : Controller
             })
             .ToDictionaryAsync(x => x.WowItemId, x => (decimal)x.Avg, ct);
 
+        // Precio final por reagent (gold por unidad): vendor si aplica, sino median72 (por ahora tu avg)
+        var priceGoldByWowId = new Dictionary<int, decimal>();
+
+        foreach (var r in vendorReagents)
+        {
+            // copper -> gold
+            if ((r.VendorPriceCopper ?? 0) <= 0) continue;
+            var gold = (r.VendorPriceCopper!.Value / 10000m);
+            priceGoldByWowId[r.WowItemId] = gold;
+        }
+
+        foreach (var wowId in reagentIds)
+        {
+            if (priceGoldByWowId.ContainsKey(wowId)) continue;
+            if (median72.TryGetValue(wowId, out var g))
+                priceGoldByWowId[wowId] = g;
+        }
+
+        ViewBag.PriceGoldByWowId = priceGoldByWowId;
         ViewBag.PlanName = plan.Name;
         ViewBag.Step = step;
         ViewBag.StepsCount = stepsCount;
