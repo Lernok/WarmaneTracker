@@ -51,6 +51,17 @@ public class AlchemyPlanController : Controller
 
         // Traer precios para reagentes (por WowItemId)
         var vendorReagents = stepEntity.Reagents.Where(r => r.IsVendor).ToList();
+        var allSteps = await _db.PlanSteps
+    .AsNoTracking()
+    .Where(s => s.ProfessionPlanId == plan.Id)
+    .Select(s => new { s.Order, s.CraftWowItemId })
+    .ToListAsync(ct);
+
+        var craftableWowIds = allSteps
+            .Where(s => s.CraftWowItemId != null)
+            .Select(s => s.CraftWowItemId!.Value)
+            .ToHashSet();
+
         var reagentIds = stepEntity.Reagents.Where(r => !r.IsVendor).Select(r => r.WowItemId).Distinct().ToList();
 
 
@@ -96,6 +107,8 @@ public class AlchemyPlanController : Controller
         ViewBag.StepsCount = stepsCount;
         ViewBag.ItemsByWowId = items.ToDictionary(i => i.WowItemId!.Value, i => i);
         ViewBag.Median72ByWowId = median72;
+        ViewBag.CraftableWowIds = craftableWowIds;
+
 
         return View(stepEntity);
     }
