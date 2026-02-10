@@ -1,0 +1,88 @@
+﻿@model WarmaneTracker.Web.Models.PlanStep
+@using WarmaneTracker.Web.Models
+
+@{
+    ViewData["Title"] = "Alchemy Plan";
+    var planName = (string)(ViewBag.PlanName ?? "Alchemy Plan");
+    var step = (int)(ViewBag.Step ?? 1);
+    var stepsCount = (int)(ViewBag.StepsCount ?? 1);
+
+    var itemsByWowId = ViewBag.ItemsByWowId as Dictionary<int, Item> ?? new();
+    var median72 = ViewBag.Median72ByWowId as Dictionary<int, decimal> ?? new();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2 class="m-0">@planName</h2>
+        <div class="text-muted">Paso @step / @stepsCount — Skill @Model.FromSkill → @Model.ToSkill</div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary @(step <= 1 ? "disabled" : "")" href="/alchemy?step=@(step - 1)">◀ Anterior</a>
+        <a class="btn btn-outline-secondary @(step >= stepsCount ? "disabled" : "")" href="/alchemy?step=@(step + 1)">Siguiente ▶</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="fw-bold">@Model.RecipeName</div>
+        <div class="text-muted">CraftCount recomendado: @Model.CraftCount</div>
+    </div>
+</div>
+
+<table class="table table-striped table-sm align-middle">
+    <thead>
+        <tr>
+            <th>Reagent</th>
+            <th class="text-end">Qty</th>
+            <th class="text-end">LastMin</th>
+            <th class="text-end">Median72h (avg)</th>
+            <th class="text-end">Est. Cost</th>
+            <th>Señal</th>
+        </tr>
+    </thead>
+    <tbody>
+        @{
+            decimal total = 0m;
+
+            foreach (var r in Model.Reagents.OrderBy(x => x.NameHint))
+            {
+                itemsByWowId.TryGetValue(r.WowItemId, out var item);
+                median72.TryGetValue(r.WowItemId, out var m72);
+
+                decimal? lastMin = item?.LastMinBuyoutGold;
+                decimal? price = lastMin ?? (m72 > 0 ? m72 : null);
+
+                var est = price.HasValue ? price.Value * r.Qty * Model.CraftCount : 0m;
+                if (price.HasValue) total += est;
+
+                string signal = "-";
+                if (price.HasValue && m72 > 0 && lastMin.HasValue)
+                {
+                    if (lastMin.Value <= m72 * 0.90m) signal = "BUY";
+                    else if (lastMin.Value >= m72 * 1.10m) signal = "WAIT";
+                    else signal = "OK";
+                }
+
+                <tr>
+                    <td>
+                        <div class="fw-semibold">@(!string.IsNullOrWhiteSpace(r.NameHint) ? r.NameHint : $"Item {r.WowItemId}")</div>
+                        <div class="text-muted small">WowItemId: @r.WowItemId</div>
+                    </td>
+                    <td class="text-end">@r.Qty</td>
+                    <td class="text-end">@((lastMin?.ToString("0.##")) ?? "-")</td>
+                    <td class="text-end">@((m72 > 0 ? m72.ToString("0.##") : "-"))</td>
+                    <td class="text-end">@((price.HasValue ? est.ToString("0.##") : "-"))</td>
+                    <td>@signal</td>
+                </tr>
+            }
+        }
+    </tbody>
+    <tfoot>
+        <tr>
+            <th colspan="4" class="text-end">Total estimado del paso</th>
+            <th class="text-end">@total.ToString("0.##")</th>
+            <th></th>
+        </tr>
+    </tfoot>
+</table>

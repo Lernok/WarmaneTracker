@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// AuctionScanHostedService.cs
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 using System.Text.RegularExpressions;
 using WarmaneTracker.Web.Data;
@@ -12,13 +13,16 @@ public sealed class AuctionScanHostedService : BackgroundService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AuctionScanHostedService> _logger;
 
-    // Tu URL (Onyxia id=17, faction=1)
+    // Onyxia id=17, faction=1
     private const string ScanUrl = "https://ah.nerfed.net/realm/getfile?id=17&faction=1";
 
-    // Regex actual (la misma lógica que ya te funciona)
+    // Groups:
+    // 1) full entry (up to "false")
+    // 2) itemId
     private static readonly Regex RopeEntryRegex = new(
-        @"\|Hitem:(\d+):[^|]*\|h\[.*?\]\|h\|r"",\s*\d+,\s*""[^""]+"",\s*""[^""]+"",\s*\d+,\s*(\d+),\s*(\d+),\s*(\d+)",
-        RegexOptions.Compiled | RegexOptions.Singleline);
+        @"(\{""\|c[0-9a-fA-F]{8}\|Hitem:(\d+):[^|]*\|h\[[^]]*\]\|h\|r"".*?,false)",
+        RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.NonBacktracking,
+        TimeSpan.FromSeconds(10));
 
     public AuctionScanHostedService(
         IServiceScopeFactory scopeFactory,
@@ -58,51 +62,93 @@ public sealed class AuctionScanHostedService : BackgroundService
         var bytes = await http.GetByteArrayAsync(ScanUrl, ct);
         var text = Encoding.UTF8.GetString(bytes);
 
-        // parse (igual que tu controller, pero sobre string)
+        // Parse
         var perItemPricesGold = new Dictionary<int, List<decimal>>();
         var perItemQty = new Dictionary<int, int>();
 
-        int rowsParsed = 0, rowsFailed = 0, linesWithHitem = 0;
+        int rowsParsed = 0, rowsFailed = 0;
         DateTime? scanTimeUtc = null;
 
-        using var sr = new StringReader(text);
-        string? line;
-        while ((line = await sr.ReadLineAsync()) is not null)
+        // timestamp
+        var tm = Regex.Match(text, @"(ImageUpdated|LastFullScan)\s*=\s*(\d+)");
+        if (tm.Success && long.TryParse(tm.Groups[2].Value, out var unix))
+            scanTimeUtc = DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
+
+        // normalize escapes
+        var normalized = text
+            .Replace("\\\"", "\"")
+            .Replace("\\{", "{")
+            .Replace("\\}", "}");
+
+        var matches = RopeEntryRegex.Matches(normalized);
+        _logger.LogInformation("Hosted scan regex matches={matches}", matches.Count);
+
+        foreach (Match m in matches)
         {
-            if (scanTimeUtc is null)
-            {
-                var tm = Regex.Match(line, @"(ImageUpdated|LastFullScan)\s*=\s*(\d+)");
-                if (tm.Success && long.TryParse(tm.Groups[2].Value, out var unix))
-                    scanTimeUtc = DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
-            }
+            var entry = m.Groups[1].Value;
 
-            if (!line.Contains("|Hitem:", StringComparison.OrdinalIgnoreCase))
+            if (!int.TryParse(m.Groups[2].Value, out var itemId))
+            {
+                rowsFailed++;
                 continue;
-
-            linesWithHitem++;
-
-            var normalized = line.Replace("\\\"", "\"");
-            var matches = RopeEntryRegex.Matches(normalized);
-            if (matches.Count == 0) continue;
-
-            foreach (Match m in matches)
-            {
-                if (!int.TryParse(m.Groups[1].Value, out var itemId)) { rowsFailed++; continue; }
-                if (!long.TryParse(m.Groups[2].Value, out var buyoutCopper) || buyoutCopper <= 0) { rowsFailed++; continue; }
-                if (!int.TryParse(m.Groups[3].Value, out var stack) || stack <= 0) stack = 1;
-
-                var perUnitGold = (buyoutCopper / (decimal)stack) / 10000m;
-
-                if (!perItemPricesGold.TryGetValue(itemId, out var list))
-                {
-                    list = new List<decimal>(32);
-                    perItemPricesGold[itemId] = list;
-                }
-                list.Add(perUnitGold);
-
-                perItemQty[itemId] = (perItemQty.TryGetValue(itemId, out var q) ? q : 0) + stack;
-                rowsParsed++;
             }
+
+            var parts = entry.Split(',');
+
+            // stack index (as validated in your FIRST ENTRY CHUNK)
+            int stack = 1;
+            if (parts.Length > 6 && int.TryParse(parts[6], out var st) && st > 0)
+                stack = st;
+
+            // buyout fallback to minBid if buyout=0
+            long buyoutCopper = 0;
+
+            int falseIndex = -1;
+            for (int i = parts.Length - 1; i >= 0; i--)
+            {
+                var t = parts[i].Trim();
+                if (t == "false" || t.StartsWith("false", StringComparison.Ordinal))
+                {
+                    falseIndex = i;
+                    break;
+                }
+            }
+            if (falseIndex < 0)
+            {
+                rowsFailed++;
+                continue;
+            }
+
+            long minBidCopper = 0;
+
+            // ... minBid, bidInc, buyout, currentBid, false
+            if (falseIndex >= 3 && long.TryParse(parts[falseIndex - 2].Trim(), out var bo) && bo > 0)
+                buyoutCopper = bo;
+
+            if (falseIndex >= 5 && long.TryParse(parts[falseIndex - 4].Trim(), out var mb) && mb > 0)
+                minBidCopper = mb;
+
+            if (buyoutCopper <= 0)
+                buyoutCopper = minBidCopper;
+
+            if (buyoutCopper <= 0)
+            {
+                rowsFailed++;
+                continue;
+            }
+
+            var perUnitGold = (buyoutCopper / (decimal)stack) / 10000m;
+
+            if (!perItemPricesGold.TryGetValue(itemId, out var list))
+            {
+                list = new List<decimal>(32);
+                perItemPricesGold[itemId] = list;
+            }
+
+            list.Add(perUnitGold);
+            perItemQty[itemId] = (perItemQty.TryGetValue(itemId, out var q) ? q : 0) + stack;
+
+            rowsParsed++;
         }
 
         var ts = scanTimeUtc ?? DateTime.UtcNow;
@@ -110,8 +156,6 @@ public sealed class AuctionScanHostedService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", ct);
-        await db.Database.ExecuteSqlRawAsync("PRAGMA busy_timeout=60000;", ct);
         // Retención 72h: borrar history viejo
         var cutoff = DateTime.UtcNow.AddHours(-72);
         await db.PriceHistory.Where(x => x.TimestampUtc < cutoff).ExecuteDeleteAsync(ct);
@@ -119,11 +163,17 @@ public sealed class AuctionScanHostedService : BackgroundService
         var ids = perItemPricesGold.Keys.ToList();
         var urls = ids.Select(id => $"https://ah.nerfed.net/item/index?id={id}&faction=1&realm=17").ToList();
 
-        var existingByUrl = await db.Items.Where(x => urls.Contains(x.Url)).ToDictionaryAsync(x => x.Url, ct);
-        var existingByItemId = await db.Items.Where(x => x.WowItemId != null && ids.Contains(x.WowItemId.Value))
+        var existingByUrl = await db.Items
+            .Where(x => urls.Contains(x.Url))
+            .ToDictionaryAsync(x => x.Url, ct);
+
+        var existingByItemId = await db.Items
+            .Where(x => x.WowItemId != null && ids.Contains(x.WowItemId.Value))
             .ToDictionaryAsync(x => x.WowItemId!.Value, ct);
 
         int itemsCreated = 0, itemsUpdated = 0, historyInserted = 0;
+
+        await db.PriceHistory.Where(x => x.TimestampUtc == ts).ExecuteDeleteAsync(ct);
 
         foreach (var id in ids)
         {
@@ -164,7 +214,6 @@ public sealed class AuctionScanHostedService : BackgroundService
             item.LastQty = qtySum;
             item.LastFetchedAtUtc = ts;
 
-            // snapshot
             db.PriceHistory.Add(new PriceHistory
             {
                 Item = item,
@@ -178,8 +227,9 @@ public sealed class AuctionScanHostedService : BackgroundService
 
         await db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Scan OK ts={ts} linesWithHitem={lines} parsed={parsed} failed={failed} items+={ic} items~={iu} history+={hi}",
-            ts, linesWithHitem, rowsParsed, rowsFailed, itemsCreated, itemsUpdated, historyInserted);
+        _logger.LogInformation(
+            "Scan OK ts={ts} parsed={parsed} failed={failed} items+={ic} items~={iu} history+={hi}",
+            ts, rowsParsed, rowsFailed, itemsCreated, itemsUpdated, historyInserted);
     }
 
     private static decimal MedianSorted(List<decimal> sorted)
