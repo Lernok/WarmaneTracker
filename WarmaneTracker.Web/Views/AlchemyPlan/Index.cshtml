@@ -10,6 +10,8 @@
     var itemsByWowId = ViewBag.ItemsByWowId as Dictionary<int, Item> ?? new();
     var median72 = ViewBag.Median72ByWowId as Dictionary<int, decimal> ?? new();
     var priceGoldByWowId = ViewBag.PriceGoldByWowId as Dictionary<int, decimal> ?? new();
+    var craftableWowIds = ViewBag.CraftableWowIds as HashSet<int> ?? new();
+
 
 }
 
@@ -59,15 +61,26 @@
 
                 // para label/Señal
                 bool isVendor = r.IsVendor && (r.VendorPriceCopper ?? 0) > 0;
+                bool isCraft = craftableWowIds.Contains(r.WowItemId);
+
 
 
                 var est = price.HasValue ? price.Value * r.Qty * Model.CraftCount : 0m;
                 if (price.HasValue) total += est;
 
+
                 string signal = "-";
                 if (isVendor)
                 {
                     signal = "VENDOR";
+                }
+                else if (isCraft)
+                {
+                    signal = "CRAFT";
+                }
+                else if (!price.HasValue)
+                {
+                    signal = "NO DATA";
                 }
                 else if (m72 > 0 && lastMin.HasValue)
                 {
@@ -75,6 +88,7 @@
                     else if (lastMin.Value >= m72 * 1.10m) signal = "WAIT";
                     else signal = "OK";
                 }
+
 
 
                 <tr>
