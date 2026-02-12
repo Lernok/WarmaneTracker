@@ -20,8 +20,11 @@
     </div>
 
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-secondary @(step <= 1 ? "disabled" : "")" href="/alchemy?step=@(step - 1)">◀ Anterior</a>
-        <a class="btn btn-outline-secondary @(step >= stepsCount ? "disabled" : "")" href="/alchemy?step=@(step + 1)">Siguiente ▶</a>
+        <a class="btn btn-outline-secondary @(step <= 1 ? "disabled" : "")"
+           href="@Url.Action("Index", "AlchemyPlan", new { step = step - 1 })">◀ Anterior</a>
+
+        <a class="btn btn-outline-secondary @(step >= stepsCount ? "disabled" : "")"
+           href="@Url.Action("Index", "AlchemyPlan", new { step = step + 1 })">Siguiente ▶</a>
     </div>
 </div>
 
@@ -43,6 +46,7 @@
             <th class="text-end">Est. Cost</th>
             <th>Source</th>
             <th>Señal</th>
+            <th class="text-center">OK</th>
         </tr>
     </thead>
     <tbody>
@@ -100,13 +104,20 @@
                     <td class="text-end">@((unitPrice.HasValue ? est.ToString("0.##") : "-"))</td>
                     <td>@source</td>
                     <td>@signal</td>
+                    <td class="text-center">
+                        <input type="checkbox"
+                               class="reagent-check form-check-input"
+                               data-plan="@planName"
+                               data-step="@step"
+                               data-wowid="@r.WowItemId" />
+                    </td>
                 </tr>
             }
         }
     </tbody>
     <tfoot>
         <tr>
-            <th colspan="5" class="text-end">Total estimado del paso</th>
+            <th colspan="6" class="text-end">Total estimado del paso</th>
             <th class="text-end">@total.ToString("0.##")</th>
             <th colspan="2"></th>
         </tr>

@@ -12,6 +12,17 @@ public class AlchemyPlanController : Controller
     [HttpGet("/alchemy")]
     public async Task<IActionResult> Index(int step = 1, CancellationToken ct = default)
     {
+        // 1) Si NO vino step por query, intentamos usar cookie y redirigimos
+        if (!Request.Query.ContainsKey("step"))
+        {
+            if (Request.Cookies.TryGetValue("alchemy_last_step", out var s) &&
+                int.TryParse(s, out var last) &&
+                last > 0)
+            {
+                return RedirectToAction(nameof(Index), new { step = last });
+            }
+        }
+
         var plan = await _db.ProfessionPlans
             .AsNoTracking()
             .Where(p => p.Profession == "Alchemy" && p.Realm == 17 && p.Faction == 1)
@@ -49,54 +60,53 @@ public class AlchemyPlanController : Controller
             return RedirectToAction(nameof(Index), new { step = 1 });
         }
 
-        // Traer precios para reagentes (por WowItemId)
+        // 2) Guardar cookie con el paso actual (ya validado)
+        Response.Cookies.Append("alchemy_last_step", step.ToString(), new CookieOptions
+        {
+            Expires = DateTimeOffset.UtcNow.AddDays(30),
+            IsEssential = true,
+            Path = "/"
+        });
+
+        // ---- tu lógica existente de vendor/craftable/precios ----
+
         var vendorReagents = stepEntity.Reagents.Where(r => r.IsVendor).ToList();
+
         var allSteps = await _db.PlanSteps
-    .AsNoTracking()
-    .Where(s => s.ProfessionPlanId == plan.Id)
-    .Select(s => new { s.Order, s.CraftWowItemId })
-    .ToListAsync(ct);
+            .AsNoTracking()
+            .Where(s => s.ProfessionPlanId == plan.Id)
+            .Select(s => new { s.Order, s.CraftWowItemId })
+            .ToListAsync(ct);
 
         var craftableWowIds = allSteps
-            .Where(s => s.CraftWowItemId != null && s.Order < step)
+            .Where(s => s.CraftWowItemId != null)
             .Select(s => s.CraftWowItemId!.Value)
             .ToHashSet();
 
-
         var reagentIds = stepEntity.Reagents
-            .Where(r => !r.IsVendor && !craftableWowIds.Contains(r.WowItemId))
+            .Where(r => !r.IsVendor)
             .Select(r => r.WowItemId)
             .Distinct()
             .ToList();
-
 
         var items = await _db.Items.AsNoTracking()
             .Where(i => i.WowItemId != null && reagentIds.Contains(i.WowItemId.Value))
             .ToListAsync(ct);
 
-        // Traer Median72h usando tu historial (PriceHistory)
         var cutoff = DateTime.UtcNow.AddHours(-72);
 
         var median72 = await _db.PriceHistory.AsNoTracking()
             .Where(h => h.TimestampUtc >= cutoff && h.Item.WowItemId != null && reagentIds.Contains(h.Item.WowItemId.Value))
             .GroupBy(h => h.Item.WowItemId!.Value)
-            .Select(g => new
-            {
-                WowItemId = g.Key,
-                // promedio para MVP (luego lo cambiamos por mediana real si querés)
-                Avg = g.Average(x => x.MinBuyoutGold)
-            })
+            .Select(g => new { WowItemId = g.Key, Avg = g.Average(x => x.MinBuyoutGold) })
             .ToDictionaryAsync(x => x.WowItemId, x => (decimal)x.Avg, ct);
 
-        // Precio final por reagent (gold por unidad): vendor si aplica, sino median72 (por ahora tu avg)
         var priceGoldByWowId = new Dictionary<int, decimal>();
 
         foreach (var r in vendorReagents)
         {
-            // copper -> gold
             if ((r.VendorPriceCopper ?? 0) <= 0) continue;
-            var gold = (r.VendorPriceCopper!.Value / 10000m);
-            priceGoldByWowId[r.WowItemId] = gold;
+            priceGoldByWowId[r.WowItemId] = (r.VendorPriceCopper!.Value / 10000m);
         }
 
         foreach (var wowId in reagentIds)
@@ -114,7 +124,7 @@ public class AlchemyPlanController : Controller
         ViewBag.Median72ByWowId = median72;
         ViewBag.CraftableWowIds = craftableWowIds;
 
-
         return View(stepEntity);
     }
+
 }
