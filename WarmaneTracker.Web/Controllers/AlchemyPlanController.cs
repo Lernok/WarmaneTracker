@@ -34,6 +34,12 @@ public class AlchemyPlanController : Controller
             return RedirectToAction("Index", "Home");
         }
 
+        if (!Request.Query.ContainsKey("step"))
+        {
+            if (Request.Cookies.TryGetValue("alchemy_last_step", out var s) && int.TryParse(s, out var last))
+                step = last;
+        }
+
         if (step < 1) step = 1;
         if (step > stepsCount) step = stepsCount;
 
@@ -114,6 +120,11 @@ public class AlchemyPlanController : Controller
         ViewBag.Median72ByWowId = median72;
         ViewBag.CraftableWowIds = craftableWowIds;
 
+        Response.Cookies.Append("alchemy_last_step", step.ToString(), new CookieOptions
+        {
+            Expires = DateTimeOffset.UtcNow.AddDays(30),
+            IsEssential = true
+        });
 
         return View(stepEntity);
     }
