@@ -47,6 +47,13 @@ public class AppDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<PlanStep>()
+            .HasMany(s => s.Notes)
+            .WithOne(n => n.PlanStep)
+            .HasForeignKey(n => n.PlanStepId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+
+        modelBuilder.Entity<PlanStep>()
             .HasIndex(s => new { s.ProfessionPlanId, s.Order })
             .IsUnique();
 

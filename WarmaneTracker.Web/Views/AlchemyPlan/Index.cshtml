@@ -69,6 +69,15 @@
         </ul>
     </div>
 }
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <div class="text-muted">
+        Checklist: <span id="okCount">0</span>/<span id="okTotal">0</span>
+    </div>
+
+    <button type="button" id="resetStep" class="btn btn-sm btn-outline-danger">
+        Reset paso
+    </button>
+</div>
 
 
 <table class="table table-striped table-sm align-middle">
@@ -141,11 +150,18 @@
                     <td>@source</td>
                     <td>@signal</td>
                     <td class="text-center">
-                        <input type="checkbox"
-                               class="reagent-check form-check-input"
-                               data-plan="@planName"
-                               data-step="@step"
-                               data-wowid="@r.WowItemId" />
+                        @if (source == "AH" || source == "VENDOR")
+                        {
+                            <input type="checkbox"
+                                   class="reagent-check form-check-input"
+                                   data-plan="@planName"
+                                   data-step="@step"
+                                   data-wowid="@r.WowItemId" />
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
                     </td>
                 </tr>
             }
@@ -163,12 +179,10 @@
 @section Scripts {
     <script>
         (function() {
-            // Clave única por plan + step (así no se mezcla entre pasos)
             const plan = "@planName";
             const step = "@step";
             const key = `alchemy_ok:${plan}:step:${step}`;
 
-            // Lee el estado guardado: { "2447": true, "765": true, ... }
             function loadState() {
                 try { return JSON.parse(localStorage.getItem(key) || "{}"); }
                 catch { return {}; }
@@ -178,13 +192,26 @@
                 localStorage.setItem(key, JSON.stringify(state));
             }
 
-            const state = loadState();
+            function updateCounters() {
+                const checks = Array.from(document.querySelectorAll(".reagent-check"));
+                const total = checks.length;
+                const ok = checks.filter(c => c.checked).length;
+
+                const okCountEl = document.getElementById("okCount");
+                const okTotalEl = document.getElementById("okTotal");
+                if (okCountEl) okCountEl.textContent = ok;
+                if (okTotalEl) okTotalEl.textContent = total;
+            }
+
+            let state = loadState();
 
             // 1) Pintar checks al cargar
             document.querySelectorAll(".reagent-check").forEach(cb => {
                 const wowid = cb.dataset.wowid;
                 cb.checked = !!state[wowid];
             });
+
+            updateCounters();
 
             // 2) Guardar al cambiar
             document.addEventListener("change", (e) => {
@@ -194,7 +221,21 @@
                 const wowid = cb.dataset.wowid;
                 state[wowid] = cb.checked;
                 saveState(state);
+                updateCounters();
             });
+
+            // 3) Reset del paso
+            const resetBtn = document.getElementById("resetStep");
+            if (resetBtn) {
+                resetBtn.addEventListener("click", () => {
+                    localStorage.removeItem(key);
+                    state = {};
+
+                    document.querySelectorAll(".reagent-check").forEach(cb => cb.checked = false);
+                    updateCounters();
+                });
+            }
         })();
     </script>
 }
+
