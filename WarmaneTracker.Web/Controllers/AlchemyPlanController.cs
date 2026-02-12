@@ -58,11 +58,16 @@ public class AlchemyPlanController : Controller
     .ToListAsync(ct);
 
         var craftableWowIds = allSteps
-            .Where(s => s.CraftWowItemId != null)
+            .Where(s => s.CraftWowItemId != null && s.Order < step)
             .Select(s => s.CraftWowItemId!.Value)
             .ToHashSet();
 
-        var reagentIds = stepEntity.Reagents.Where(r => !r.IsVendor).Select(r => r.WowItemId).Distinct().ToList();
+
+        var reagentIds = stepEntity.Reagents
+            .Where(r => !r.IsVendor && !craftableWowIds.Contains(r.WowItemId))
+            .Select(r => r.WowItemId)
+            .Distinct()
+            .ToList();
 
 
         var items = await _db.Items.AsNoTracking()

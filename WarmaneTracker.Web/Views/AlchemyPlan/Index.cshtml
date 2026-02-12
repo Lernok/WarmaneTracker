@@ -11,8 +11,6 @@
     var median72 = ViewBag.Median72ByWowId as Dictionary<int, decimal> ?? new();
     var priceGoldByWowId = ViewBag.PriceGoldByWowId as Dictionary<int, decimal> ?? new();
     var craftableWowIds = ViewBag.CraftableWowIds as HashSet<int> ?? new();
-
-
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -41,7 +39,9 @@
             <th class="text-end">Qty</th>
             <th class="text-end">LastMin</th>
             <th class="text-end">Median72h (avg)</th>
+            <th class="text-end">Unit</th>
             <th class="text-end">Est. Cost</th>
+            <th>Source</th>
             <th>Señal</th>
         </tr>
     </thead>
@@ -56,40 +56,37 @@
 
                 decimal? lastMin = item?.LastMinBuyoutGold;
 
-                // precio final por unidad (vendor si aplica, sino median72)
-                decimal? price = priceGoldByWowId.TryGetValue(r.WowItemId, out var p) ? p : null;
+                // SOURCE + PRICE (gold por unidad)
+                string source;
+                decimal? unitPrice;
 
-                // para label/Señal
-                bool isVendor = r.IsVendor && (r.VendorPriceCopper ?? 0) > 0;
-                bool isCraft = craftableWowIds.Contains(r.WowItemId);
+                if (r.IsVendor && priceGoldByWowId.TryGetValue(r.WowItemId, out var vGold))
+                {
+                    source = "VENDOR";
+                    unitPrice = vGold;
+                }
+                else if (craftableWowIds.Contains(r.WowItemId))
+                {
+                    source = "CRAFT";
+                    unitPrice = null; // no lo contamos como compra
+                }
+                else
+                {
+                    source = "AH";
+                    unitPrice = lastMin ?? (m72 > 0 ? m72 : (decimal?)null);
+                }
 
+                var est = unitPrice.HasValue ? unitPrice.Value * r.Qty * Model.CraftCount : 0m;
+                if (unitPrice.HasValue) total += est;
 
-
-                var est = price.HasValue ? price.Value * r.Qty * Model.CraftCount : 0m;
-                if (price.HasValue) total += est;
-
-
+                // Señal solo para AH
                 string signal = "-";
-                if (isVendor)
-                {
-                    signal = "VENDOR";
-                }
-                else if (isCraft)
-                {
-                    signal = "CRAFT";
-                }
-                else if (!price.HasValue)
-                {
-                    signal = "NO DATA";
-                }
-                else if (m72 > 0 && lastMin.HasValue)
+                if (source == "AH" && unitPrice.HasValue && m72 > 0 && lastMin.HasValue)
                 {
                     if (lastMin.Value <= m72 * 0.90m) signal = "BUY";
                     else if (lastMin.Value >= m72 * 1.10m) signal = "WAIT";
                     else signal = "OK";
                 }
-
-
 
                 <tr>
                     <td>
@@ -98,17 +95,10 @@
                     </td>
                     <td class="text-end">@r.Qty</td>
                     <td class="text-end">@((lastMin?.ToString("0.##")) ?? "-")</td>
-                    <td class="text-end">
-                        @if (isVendor)
-                        {
-                            <span>Vendor @((r.VendorPriceCopper!.Value / 10000m).ToString("0.##"))</span>
-                        }
-                        else
-                        {
-                            <span>@(m72 > 0 ? m72.ToString("0.##") : "-")</span>
-                        }
-                    </td>
-                    <td class="text-end">@((price.HasValue ? est.ToString("0.##") : "-"))</td>
+                    <td class="text-end">@((m72 > 0 ? m72.ToString("0.##") : "-"))</td>
+                    <td class="text-end">@((unitPrice?.ToString("0.##")) ?? "-")</td>
+                    <td class="text-end">@((unitPrice.HasValue ? est.ToString("0.##") : "-"))</td>
+                    <td>@source</td>
                     <td>@signal</td>
                 </tr>
             }
@@ -116,9 +106,9 @@
     </tbody>
     <tfoot>
         <tr>
-            <th colspan="4" class="text-end">Total estimado del paso</th>
+            <th colspan="5" class="text-end">Total estimado del paso</th>
             <th class="text-end">@total.ToString("0.##")</th>
-            <th></th>
+            <th colspan="2"></th>
         </tr>
     </tfoot>
 </table>
