@@ -21,4 +21,6 @@ public class PlanStep
     public int CraftCount { get; set; }
 
     public List<StepReagent> Reagents { get; set; } = new();
+    public List<PlanStepNote> Notes { get; set; } = new();
+
 }

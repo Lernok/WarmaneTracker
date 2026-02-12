@@ -7,7 +7,7 @@ public static class SeedData
 {
     public static async Task EnsureSeededAsync(AppDbContext db, CancellationToken ct = default)
     {
-        const bool FORCE_RESET = true;
+        const bool FORCE_RESET = false;
 
         if (FORCE_RESET)
         {

@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<ProfessionPlan> ProfessionPlans => Set<ProfessionPlan>();
     public DbSet<PlanStep> PlanSteps => Set<PlanStep>();
     public DbSet<StepReagent> StepReagents => Set<StepReagent>();
+    public DbSet<PlanStepNote> PlanStepNotes => Set<PlanStepNote>();
+
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
