@@ -143,7 +143,7 @@ public class AlchemyPlanController : Controller
         ViewBag.StepsCount = stepsCount;
         ViewBag.ItemsByWowId = items.ToDictionary(i => i.WowItemId!.Value, i => i);
         ViewBag.Median72ByWowId = median72;
-        ViewBag.CraftableWowIds = craftableWowIds; 
+        ViewBag.CraftableWowIds = craftableWowIds;
 
         return View(stepEntity);
     }
