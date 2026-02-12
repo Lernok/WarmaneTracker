@@ -159,3 +159,42 @@
         </tr>
     </tfoot>
 </table>
+
+@section Scripts {
+    <script>
+        (function() {
+            // Clave única por plan + step (así no se mezcla entre pasos)
+            const plan = "@planName";
+            const step = "@step";
+            const key = `alchemy_ok:${plan}:step:${step}`;
+
+            // Lee el estado guardado: { "2447": true, "765": true, ... }
+            function loadState() {
+                try { return JSON.parse(localStorage.getItem(key) || "{}"); }
+                catch { return {}; }
+            }
+
+            function saveState(state) {
+                localStorage.setItem(key, JSON.stringify(state));
+            }
+
+            const state = loadState();
+
+            // 1) Pintar checks al cargar
+            document.querySelectorAll(".reagent-check").forEach(cb => {
+                const wowid = cb.dataset.wowid;
+                cb.checked = !!state[wowid];
+            });
+
+            // 2) Guardar al cambiar
+            document.addEventListener("change", (e) => {
+                const cb = e.target;
+                if (!cb.classList || !cb.classList.contains("reagent-check")) return;
+
+                const wowid = cb.dataset.wowid;
+                state[wowid] = cb.checked;
+                saveState(state);
+            });
+        })();
+    </script>
+}
