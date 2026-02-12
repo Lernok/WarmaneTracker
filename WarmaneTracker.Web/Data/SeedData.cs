@@ -7,13 +7,45 @@ public static class SeedData
 {
     public static async Task EnsureSeededAsync(AppDbContext db, CancellationToken ct = default)
     {
-        // Si ya existe un plan de Alchemy para este realm/faction, no seedear de nuevo
+        const bool FORCE_RESET = true;
+
+        if (FORCE_RESET)
+        {
+            var existingPlan = await db.ProfessionPlans
+                .Where(p => p.Profession == "Alchemy" && p.Realm == 17 && p.Faction == 1)
+                .OrderByDescending(p => p.Id)
+                .FirstOrDefaultAsync(ct);
+
+            if (existingPlan is not null)
+            {
+                var stepIds = await db.PlanSteps
+                    .Where(s => s.ProfessionPlanId == existingPlan.Id)
+                    .Select(s => s.Id)
+                    .ToListAsync(ct);
+
+                if (stepIds.Count > 0)
+                {
+                    await db.StepReagents
+                        .Where(r => stepIds.Contains(r.PlanStepId))
+                        .ExecuteDeleteAsync(ct);
+
+                    await db.PlanSteps
+                        .Where(s => s.ProfessionPlanId == existingPlan.Id)
+                        .ExecuteDeleteAsync(ct);
+                }
+
+                await db.ProfessionPlans
+                    .Where(p => p.Id == existingPlan.Id)
+                    .ExecuteDeleteAsync(ct);
+            }
+        }
+
         var exists = await db.ProfessionPlans.AnyAsync(p =>
             p.Profession == "Alchemy" && p.Realm == 17 && p.Faction == 1, ct);
 
         if (exists) return;
 
-        var plan = new ProfessionPlan
+        var newPlan = new ProfessionPlan
         {
             Profession = "Alchemy",
             Name = "WotLK Alchemy",
@@ -24,16 +56,18 @@ public static class SeedData
 
         // MVP (10 pasos iniciales) — después lo refinamos con la guía final
         // IDs: Peacebloom=2447, Silverleaf=765, Empty Vial=3371
-        plan.Steps.AddRange(new[]
+        newPlan.Steps.AddRange(new[]
 {
     Step(1, 1, 60, "Minor Healing Potion", craftWowItemId: 118, craftCount: 65,
-        reagents: new[] { R(2447,"Peacebloom",65), R(765,"Silverleaf",65), R(3371,"Empty Vial",65, isVendor: true) }),
+        reagents: new[] { R(2447,"Peacebloom",65), R(765,"Silverleaf",65), R(3371,"Empty Vial",65, isVendor: true) },
+        notes: new[] { Note("TRAINER", "Learn Journeyman Alchemy at your trainer. Requires character level 10.", 1, 10, scope: "NEXT") }),
 
     Step(2, 60, 110, "Lesser Healing Potion", craftWowItemId: 858, craftCount: 65,
         reagents: new[] { R(118,"Minor Healing Potion",65), R(2450,"Briarthorn",65) }),
 
     Step(3, 110, 140, "Healing Potion", craftWowItemId: 929, craftCount: 35,
-        reagents: new[] { R(2453,"Bruiseweed",35), R(2450,"Briarthorn",35), R(3372,"Leaded Vial",35, isVendor: true) }),
+        reagents: new[] { R(2453,"Bruiseweed",35), R(2450,"Briarthorn",35), R(3372,"Leaded Vial",35, isVendor: true) },
+        notes: new[] { Note("TRAINER", "Learn Expert Alchemy at your trainer. Requires level 20.", 1, 20, scope: "NEXT") }),
 
     Step(4, 140, 155, "Lesser Mana Potion", craftWowItemId: 3385, craftCount: 20,
         reagents: new[] { R(785,"Mageroyal",20), R(3820,"Stranglekelp",20), R(3371,"Empty Vial",20, isVendor: true) }),
@@ -42,7 +76,8 @@ public static class SeedData
         reagents: new[] { R(3357,"Liferoot",35), R(3356,"Kingsblood",35), R(3372,"Leaded Vial",35, isVendor: true) }),
 
     Step(6, 185, 210, "Elixir of Agility", craftWowItemId: 8949, craftCount: 30,
-        reagents: new[] { R(3820,"Stranglekelp",30), R(3821,"Goldthorn",30), R(3372,"Leaded Vial",30, isVendor: true) }),
+        reagents: new[] { R(3820,"Stranglekelp",30), R(3821,"Goldthorn",30), R(3372,"Leaded Vial",30, isVendor: true) },
+        notes: new[] { Note("TRAINER", "Learn Artisan Alchemy at your trainer. Requires level 35.", 1, 35, scope: "NEXT") }),
 
     Step(7, 210, 215, "Elixir of Greater Defense", craftWowItemId: 8951, craftCount: 5,
         reagents: new[] { R(3355,"Wild Steelbloom",5), R(3821,"Goldthorn",5), R(3372,"Leaded Vial",5, isVendor: true) }),
@@ -51,7 +86,12 @@ public static class SeedData
         reagents: new[] { R(8838,"Sungrass",15), R(3358,"Khadgar's Whisker",15), R(8925,"Crystal Vial",15, isVendor: true) }),
 
     Step(9, 230, 231, "Philosopher's Stone", craftWowItemId: 11459, craftCount: 1,
-        reagents: new[] { R(3575,"Iron Bar",4), R(9262,"Black Vitriol",1), R(8831,"Purple Lotus",4), R(4625,"Firebloom",4) }),
+        reagents: new[] { R(3575,"Iron Bar",4), R(9262,"Black Vitriol",1), R(8831,"Purple Lotus",4), R(4625,"Firebloom",4) },
+        notes: new[]
+        {
+            Note("TIP", "Keep Philosopher's Stone for transmutes (no need to equip).", 1, scope: "INLINE"),
+            Note("RECIPE_VENDOR", "Recipe sold by Alchemist Pestlezugg in Tanaris.", 2, scope: "INLINE")
+        }),
 
     Step(10, 231, 265, "Elixir of Detect Undead", craftWowItemId: 9154, craftCount: 45,
         reagents: new[] { R(8836,"Arthas' Tears",45), R(8925,"Crystal Vial",45, isVendor: true) }),
@@ -60,7 +100,11 @@ public static class SeedData
         reagents: new[] { R(8838,"Sungrass",60), R(8839,"Blindweed",60), R(8925,"Crystal Vial",30, isVendor: true) }),
 
     Step(12, 285, 300, "Major Healing Potion", craftWowItemId: 13446, craftCount: 20,
-        reagents: new[] { R(13464,"Golden Sansam",40), R(13465,"Mountain Silversage",20), R(8925,"Crystal Vial",20, isVendor: true) }),
+        reagents: new[] { R(13464,"Golden Sansam",40), R(13465,"Mountain Silversage",20), R(8925,"Crystal Vial",20, isVendor: true) },
+        notes: new[]
+        {
+            Note("TRAINER", "Learn Master Alchemy in Outland. Requires level 50. Horde: Apothecary Antonivich (Hellfire Peninsula).", 1, 50, scope : "NEXT")
+        }),
 
     // 13A / 13B (cargamos ambas como pasos consecutivos)
     Step(13, 300, 310, "Volatile Healing Potion (A)", craftWowItemId: 33732, craftCount: 15,
@@ -76,7 +120,12 @@ public static class SeedData
         reagents: new[] { R(22785,"Felweed",5), R(22789,"Terocone",5), R(18256,"Imbued Vial",5, isVendor: true) }),
 
     Step(17, 335, 340, "Super Healing Potion", craftWowItemId: 28551, craftCount: 5,
-        reagents: new[] { R(22785,"Felweed",5), R(22791,"Netherbloom",10), R(18256,"Imbued Vial",5, isVendor: true) }),
+        reagents: new[] { R(22785,"Felweed",5), R(22791,"Netherbloom",10), R(18256,"Imbued Vial",5, isVendor: true) },
+        notes: new[]
+        {
+            Note("RECIPE_VENDOR", "Recipe: Super Mana Potion is sold by Daga Ramba and Haalrun.", 1, scope: "INLINE"),
+            Note("TRAINER", "WotLK Alchemy 350-450: Learn from Linzy Blackbolt in Dalaran. Requires level 65. Horde: Howling Fjord (Wilhelmina Renel), Borean Tundra (Arthur Henslowe), Dragonblight (Apothecary Wormwick / Bressa).", 2, 65, scope:"NEXT")
+        }),
 
     Step(18, 340, 350, "Super Mana Potion", craftWowItemId: 28555, craftCount: 10,
         reagents: new[] { R(22785,"Felweed",10), R(22786,"Dreaming Glory",20), R(18256,"Imbued Vial",10, isVendor: true) }),
@@ -143,11 +192,11 @@ public static class SeedData
 });
 
 
-        db.ProfessionPlans.Add(plan);
+        db.ProfessionPlans.Add(newPlan);
         await db.SaveChangesAsync(ct);
     }
 
-    private static PlanStep Step(int order, int from, int to, string recipe, int? craftWowItemId, int craftCount, StepReagent[] reagents)
+    private static PlanStep Step(int order, int from, int to, string recipe, int? craftWowItemId, int craftCount, StepReagent[] reagents, PlanStepNote[]? notes = null)
     {
         var s = new PlanStep
         {
@@ -159,8 +208,10 @@ public static class SeedData
             CraftCount = craftCount,
         };
         foreach (var r in reagents) s.Reagents.Add(r);
+        if (notes != null) foreach (var n in notes) s.Notes.Add(n);
         return s;
     }
+
 
     private static StepReagent R(int wowItemId, string nameHint, int qty, bool isVendor = false, long? vendorPriceCopper = null)
     => new StepReagent
@@ -171,5 +222,16 @@ public static class SeedData
         IsVendor = isVendor,
         VendorPriceCopper = vendorPriceCopper
     };
+
+    private static PlanStepNote Note(string kind, string text, int sort = 0, int? minLevel = null, string scope = "INLINE")
+    => new PlanStepNote
+    {
+        Kind = kind,
+        Text = text,
+        SortOrder = sort,
+        MinCharacterLevel = minLevel,
+        Scope = scope
+    };
+
 
 }

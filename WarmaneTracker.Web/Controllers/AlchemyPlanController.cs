@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WarmaneTracker.Web.Data;
+using WarmaneTracker.Web.Models;
 
 namespace WarmaneTracker.Web.Controllers;
 
@@ -51,14 +52,34 @@ public class AlchemyPlanController : Controller
         var stepEntity = await _db.PlanSteps
             .AsNoTracking()
             .Include(s => s.Reagents)
+            .Include(s => s.Notes)
             .Where(s => s.ProfessionPlanId == plan.Id && s.Order == step)
             .FirstOrDefaultAsync(ct);
+
+
 
         if (stepEntity is null)
         {
             TempData["Msg"] = $"No se encontró el paso {step}.";
             return RedirectToAction(nameof(Index), new { step = 1 });
         }
+
+        // Notes "NEXT" del paso anterior (se muestran como "Antes de este paso")
+        List<PlanStepNote> prevNextNotes = new();
+
+        if (step > 1)
+        {
+            prevNextNotes = await _db.PlanStepNotes
+                .AsNoTracking()
+                .Where(n => n.PlanStep.ProfessionPlanId == plan.Id
+                            && n.PlanStep.Order == step - 1
+                            && n.Scope == "NEXT")
+                .OrderBy(n => n.SortOrder)
+                .ToListAsync(ct);
+        }
+
+        ViewBag.PrevNextNotes = prevNextNotes;
+
 
         // 2) Guardar cookie con el paso actual (ya validado)
         Response.Cookies.Append("alchemy_last_step", step.ToString(), new CookieOptions
@@ -122,7 +143,7 @@ public class AlchemyPlanController : Controller
         ViewBag.StepsCount = stepsCount;
         ViewBag.ItemsByWowId = items.ToDictionary(i => i.WowItemId!.Value, i => i);
         ViewBag.Median72ByWowId = median72;
-        ViewBag.CraftableWowIds = craftableWowIds;
+        ViewBag.CraftableWowIds = craftableWowIds; 
 
         return View(stepEntity);
     }
